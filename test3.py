@@ -578,7 +578,7 @@ default_tests = pd.DataFrame({
 tests = st.data_editor(
     default_tests,
     num_rows="dynamic",
-    use_container_width=True,
+    width='stretch',
     column_config={
         "Normal stress (kPa)": st.column_config.NumberColumn(
             min_value=0.0,
@@ -607,7 +607,7 @@ st.markdown("**Calculated peak shear stresses**")
 
 st.dataframe(
     tests_used,
-    use_container_width=True,
+    width='stretch',
     hide_index=True,
     column_config={
         "Normal stress (kPa)": st.column_config.NumberColumn(
@@ -1012,7 +1012,7 @@ st.divider()
 if st.button(
     "Run bearing-capacity check",
     type="primary",
-    use_container_width=True
+    width='stretch'
 ):
 
     if condition == "Drained":
@@ -1306,7 +1306,7 @@ if st.button(
                 results.to_csv(index=False).encode("utf-8"),
                 "bearing_capacity_results.csv",
                 "text/csv",
-                use_container_width=True
+                width='stretch'
             )
 
         with d2:
@@ -1316,7 +1316,7 @@ if st.button(
                 tests_used.to_csv(index=False).encode("utf-8"),
                 "direct_shear_results.csv",
                 "text/csv",
-                use_container_width=True
+                width='stretch'
             )
 
     except ValueError as err:
@@ -1400,3 +1400,35 @@ st.warning(
     "depth factors, eccentricity, inclination, settlement and other "
     "geotechnical requirements before using results for construction."
 )
+
+# ============================================================
+# 23. BEARING CAPACITY VS FOOTING BREADTH GRAPH
+# ============================================================
+
+if "results" in locals() and not results.empty:
+    st.divider()
+    st.header("13. Bearing capacity vs footing breadth")
+
+    graph_data = (
+        results.sort_values("Breadth (m)")
+        .set_index("Breadth (m)")[
+            [
+                "Net safe bearing capacity (kPa)",
+                "Net applied pressure (kPa)"
+            ]
+        ]
+    )
+
+    st.line_chart(
+        graph_data,
+        x_label="Footing breadth, B (m)",
+        y_label="Pressure / bearing capacity (kPa)"
+    )
+
+    st.caption(
+        "The graph compares net safe bearing capacity with net applied "
+        "pressure for each trial footing breadth. The footing satisfies "
+        "the bearing-capacity check where the net safe bearing capacity "
+        "line is at or above the net applied pressure line. For a single "
+        "trial breadth, select Multiple trial breadths to view the trend."
+    )
