@@ -4879,16 +4879,54 @@ if st.session_state.active_page == "Settlement":
 
 
 # ============================================================
-# COMBINED BEARING CAPACITY AND SETTLEMENT GRAPH (COLUMN 3)
+# COMBINED BEARING CAPACITY AND SETTLEMENT GRAPH
 # ============================================================
 if st.session_state.active_page == "Combined Graph":
     bearing_df = st.session_state.get("bearing_results")
     settlement_df = st.session_state.get("settlement_results")
 
+    # Identify the smallest tested breadth that passes each design criterion.
+    bearing_limit = None
+    settlement_limit_breadth = None
+
+    if (
+        bearing_df is not None
+        and not bearing_df.empty
+        and "Result" in bearing_df.columns
+        and "Breadth (m)" in bearing_df.columns
+    ):
+        bearing_pass = bearing_df[
+            bearing_df["Result"].astype(str).str.upper() == "PASS"
+        ]
+        if not bearing_pass.empty:
+            bearing_limit = float(bearing_pass["Breadth (m)"].min())
+
+    if (
+        settlement_df is not None
+        and not settlement_df.empty
+        and "Status" in settlement_df.columns
+        and "Breadth (m)" in settlement_df.columns
+    ):
+        settlement_pass = settlement_df[
+            settlement_df["Status"].astype(str).str.upper() == "PASS"
+        ]
+        if not settlement_pass.empty:
+            settlement_limit_breadth = float(
+                settlement_pass["Breadth (m)"].min()
+            )
+
+    # The governing breadth is the larger of the two independently required limits.
+    optimum_breadth = None
+    if bearing_limit is not None and settlement_limit_breadth is not None:
+        optimum_breadth = max(bearing_limit, settlement_limit_breadth)
+
     if bearing_df is None and settlement_df is None:
-        st.info("Run the bearing-capacity check and the settlement breadth analysis to display the combined graph.")
+        st.info(
+            "Run the bearing-capacity check and the settlement breadth analysis "
+            "to display the combined graph."
+        )
     else:
-        fig_combined, ax_capacity = plt.subplots(figsize=(8, 5))
+        fig_combined, ax_capacity = plt.subplots(figsize=(10, 6))
         ax_settlement = ax_capacity.twinx()
         plotted = False
 
@@ -4897,12 +4935,17 @@ if st.session_state.active_page == "Combined Graph":
             ax_capacity.plot(
                 bearing_plot["Breadth (m)"],
                 bearing_plot["Net safe bearing capacity (kPa)"],
-                marker="o", linewidth=2, label="Net safe bearing capacity"
+                marker="o",
+                linewidth=2,
+                label="Net safe bearing capacity",
             )
             ax_capacity.plot(
                 bearing_plot["Breadth (m)"],
                 bearing_plot["Net applied pressure (kPa)"],
-                marker="s", linestyle="--", label="Net applied pressure"
+                marker="s",
+                linestyle="--",
+                linewidth=2,
+                label="Net applied pressure",
             )
             plotted = True
 
@@ -4911,23 +4954,123 @@ if st.session_state.active_page == "Combined Graph":
             ax_settlement.plot(
                 settlement_plot["Breadth (m)"],
                 settlement_plot["Total settlement (mm)"],
-                marker="^", color="tab:red", linewidth=2,
-                label="Total settlement"
+                marker="^",
+                color="tab:red",
+                linewidth=2,
+                label="Total settlement",
             )
+            if "Allowable (mm)" in settlement_plot.columns:
+                allowable_values = pd.to_numeric(
+                    settlement_plot["Allowable (mm)"], errors="coerce"
+                ).dropna()
+                if not allowable_values.empty:
+                    ax_settlement.axhline(
+                        allowable_values.iloc[0],
+                        color="tab:red",
+                        linestyle=":",
+                        linewidth=1.5,
+                        label="Allowable settlement",
+                    )
             plotted = True
 
         if plotted:
+            # Mark the independently determined breadth limits.
+            if bearing_limit is not None:
+                ax_capacity.axvline(
+                    bearing_limit,
+                    color="tab:blue",
+                    linestyle="--",
+                    linewidth=1.8,
+                    label=f"Bearing limit = {bearing_limit:.2f} m",
+                )
+
+            if settlement_limit_breadth is not None:
+                ax_capacity.axvline(
+                    settlement_limit_breadth,
+                    color="tab:orange",
+                    linestyle="--",
+                    linewidth=1.8,
+                    label=(
+                        "Settlement limit = "
+                        f"{settlement_limit_breadth:.2f} m"
+                    ),
+                )
+
+            # Mark the final governing breadth only when both checks have passing results.
+            if optimum_breadth is not None:
+                ax_capacity.axvline(
+                    optimum_breadth,
+                    color="black",
+                    linestyle="-.",
+                    linewidth=2.8,
+                    label=f"OPTIMUM BREADTH = {optimum_breadth:.2f} m",
+                )
+
             ax_capacity.set_xlabel("Footing breadth, B (m)")
-            ax_capacity.set_ylabel("Bearing capacity / applied pressure (kPa)")
+            ax_capacity.set_ylabel(
+                "Bearing capacity / applied pressure (kPa)"
+            )
             ax_settlement.set_ylabel("Total settlement (mm)")
-            ax_capacity.set_title("Bearing Capacity and Settlement vs Footing Breadth")
+            ax_capacity.set_title(
+                "Bearing Capacity and Settlement vs Footing Breadth"
+            )
             ax_capacity.grid(True, alpha=0.3)
 
             h1, l1 = ax_capacity.get_legend_handles_labels()
             h2, l2 = ax_settlement.get_legend_handles_labels()
-            ax_capacity.legend(h1 + h2, l1 + l2, loc="best")
+            ax_capacity.legend(h1 + h2, l1 + l2, loc="best", fontsize=8)
             fig_combined.tight_layout()
             st.pyplot(fig_combined)
-            st.caption("Left axis: bearing capacity and applied pressure (kPa). Right axis: total settlement (mm). The two vertical axes are separate because the quantities have different units.")
+
+            st.caption(
+                "Left axis: net safe bearing capacity and net applied pressure (kPa). "
+                "Right axis: total settlement and allowable settlement (mm). "
+                "The vertical lines show the minimum passing breadth for each "
+                "criterion and, when both are available, the governing breadth."
+            )
+
+            # Report the numerical design limits below the graph.
+            st.subheader("Breadth Selection Based on Both Criteria")
+            metric_cols = st.columns(3)
+            metric_cols[0].metric(
+                "Bearing-capacity breadth",
+                f"{bearing_limit:.2f} m" if bearing_limit is not None else "No passing trial",
+            )
+            metric_cols[1].metric(
+                "Settlement breadth",
+                (
+                    f"{settlement_limit_breadth:.2f} m"
+                    if settlement_limit_breadth is not None
+                    else "No passing trial"
+                ),
+            )
+            metric_cols[2].metric(
+                "Optimum breadth",
+                f"{optimum_breadth:.2f} m" if optimum_breadth is not None else "Not determined",
+            )
+
+            if optimum_breadth is not None:
+                st.success(
+                    f"The governing trial breadth is {optimum_breadth:.2f} m. "
+                    "It is the larger of the minimum passing breadths from "
+                    "the bearing-capacity and settlement checks."
+                )
+                st.info(
+                    "This is the optimum among the breadths tested in the input "
+                    "ranges. To establish a more precise minimum, refine the trial "
+                    "breadth interval around this value and rerun both checks."
+                )
+            else:
+                missing_checks = []
+                if bearing_limit is None:
+                    missing_checks.append("bearing capacity")
+                if settlement_limit_breadth is None:
+                    missing_checks.append("settlement")
+                st.warning(
+                    "A combined optimum breadth cannot yet be determined. "
+                    "No passing trial breadth was found for: "
+                    + " and ".join(missing_checks)
+                    + ". Check the inputs or expand the trial breadth range."
+                )
         else:
             st.info("No valid breadth-wise results are available yet.")
