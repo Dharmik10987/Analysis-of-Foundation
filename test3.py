@@ -1433,6 +1433,7 @@ if "results" in locals() and not results.empty:
         "trial breadth, select Multiple trial breadths to view the trend."
     )
 
+##################################################################################
 
 st.set_page_config(
     page_title="Foundation Settlement Calculator",
@@ -1440,290 +1441,114 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("Foundation Settlement Calculator")
-st.caption(
-    "Academic calculation tool: immediate, primary consolidation "
-    "and secondary settlement."
+st.title("FOUNDATION SETTLEMENT CALCULATOR")
+st.subheader(
+    "Immediate, Primary Consolidation and Secondary Settlement"
 )
 
-st.warning(
-    "Use verified project-specific soil parameters wherever available. "
-    "Preset values are illustrative assumptions, not measured results. "
-    "This tool is not a substitute for a complete geotechnical design."
-)
 
-# ---------------------------------------------------------
-# SOIL PRESETS
-# ---------------------------------------------------------
+
+# =========================================================
+# 1. SOIL PRESETS
+# =========================================================
 
 SOILS = {
     "Loose sand": {
-        "gamma": 17.0, "Es": 10000, "nu": 0.30,
+        "gamma": 17.0, "Es": 10000.0, "nu": 0.30,
         "Cc": 0.0, "Cr": 0.0, "C_alpha": 0.0,
-        "e0": 0.65, "ep": 0.65,
-        "sigma_pc": 100.0, "soil_type": "Granular"
+        "e0": 0.65, "ep": 0.65, "sigma_pc": 100.0
     },
     "Medium-dense sand": {
-        "gamma": 18.0, "Es": 25000, "nu": 0.30,
+        "gamma": 18.0, "Es": 25000.0, "nu": 0.30,
         "Cc": 0.0, "Cr": 0.0, "C_alpha": 0.0,
-        "e0": 0.60, "ep": 0.60,
-        "sigma_pc": 100.0, "soil_type": "Granular"
+        "e0": 0.60, "ep": 0.60, "sigma_pc": 100.0
     },
     "Dense sand": {
-        "gamma": 19.0, "Es": 50000, "nu": 0.28,
+        "gamma": 19.0, "Es": 50000.0, "nu": 0.28,
         "Cc": 0.0, "Cr": 0.0, "C_alpha": 0.0,
-        "e0": 0.50, "ep": 0.50,
-        "sigma_pc": 100.0, "soil_type": "Granular"
+        "e0": 0.50, "ep": 0.50, "sigma_pc": 100.0
     },
     "Baseline sand with fines": {
-        "gamma": 18.0, "Es": 20000, "nu": 0.30,
+        "gamma": 18.0, "Es": 20000.0, "nu": 0.30,
         "Cc": 0.15, "Cr": 0.03, "C_alpha": 0.003,
-        "e0": 0.65, "ep": 0.60,
-        "sigma_pc": 100.0, "soil_type": "Granular"
+        "e0": 0.65, "ep": 0.60, "sigma_pc": 100.0
     },
     "Soft clay": {
-        "gamma": 16.5, "Es": 4000, "nu": 0.45,
+        "gamma": 16.5, "Es": 4000.0, "nu": 0.45,
         "Cc": 0.35, "Cr": 0.07, "C_alpha": 0.025,
-        "e0": 1.00, "ep": 0.90,
-        "sigma_pc": 50.0, "soil_type": "Fine-grained"
+        "e0": 1.00, "ep": 0.90, "sigma_pc": 50.0
     },
     "Stiff clay": {
-        "gamma": 19.0, "Es": 30000, "nu": 0.35,
+        "gamma": 19.0, "Es": 30000.0, "nu": 0.35,
         "Cc": 0.20, "Cr": 0.04, "C_alpha": 0.010,
-        "e0": 0.65, "ep": 0.60,
-        "sigma_pc": 200.0, "soil_type": "Fine-grained"
+        "e0": 0.65, "ep": 0.60, "sigma_pc": 200.0
     },
     "Silty soil": {
-        "gamma": 18.0, "Es": 12000, "nu": 0.32,
+        "gamma": 18.0, "Es": 12000.0, "nu": 0.32,
         "Cc": 0.12, "Cr": 0.025, "C_alpha": 0.006,
-        "e0": 0.70, "ep": 0.65,
-        "sigma_pc": 100.0, "soil_type": "Fine-grained"
+        "e0": 0.70, "ep": 0.65, "sigma_pc": 100.0
     },
     "Layered soil": {
-        "gamma": 17.0, "Es": 10000, "nu": 0.30,
+        "gamma": 17.0, "Es": 10000.0, "nu": 0.30,
         "Cc": 0.35, "Cr": 0.07, "C_alpha": 0.025,
-        "e0": 1.00, "ep": 0.90,
-        "sigma_pc": 50.0, "soil_type": "Layered"
+        "e0": 1.00, "ep": 0.90, "sigma_pc": 50.0
     }
 }
 
-# ---------------------------------------------------------
-# INPUTS
-# ---------------------------------------------------------
+# =========================================================
+# 2. CALCULATION FUNCTIONS
+# =========================================================
 
-st.header("1. Foundation details")
+def calculate_net_pressure(P, B, L, gamma, Df):
+    area = B * L
+    q_gross = P / area
+    q_surcharge = gamma * Df
+    q_net = max(0.0, q_gross - q_surcharge)
+    return q_gross, q_net
 
-c1, c2, c3 = st.columns(3)
 
-with c1:
-    load = st.number_input(
-        "Service vertical load P (kN)",
-        min_value=1.0, value=900.0
-    )
-    depth = st.number_input(
-        "Foundation depth Df (m)",
-        min_value=0.0, value=1.5
-    )
-
-with c2:
-    length = st.number_input(
-        "Footing length L (m)",
-        min_value=0.1, value=2.0
-    )
-    settlement_limit = st.number_input(
-        "Allowable total settlement (mm)",
-        min_value=0.1, value=25.0
-    )
-
-with c3:
-    breadth_start = st.number_input(
-        "Minimum breadth (m)",
-        min_value=0.1, value=1.5
-    )
-    breadth_end = st.number_input(
-        "Maximum breadth (m)",
-        min_value=0.2, value=4.0
-    )
-
-    breadth_step = st.number_input(
-        "Breadth increment (m)",
-        min_value=0.05, value=0.5
-    )
-
-st.header("2. Soil selection")
-
-soil_name = st.selectbox("Select soil scenario", list(SOILS.keys()))
-preset = SOILS[soil_name]
-
-st.info(
-    "Preset parameters are starting assumptions only. "
-    "Edit them to match your adopted soil profile."
-)
-
-c1, c2, c3 = st.columns(3)
-
-with c1:
-    gamma = st.number_input(
-        "Bulk unit weight γ (kN/m³)",
-        min_value=1.0, value=float(preset["gamma"])
-    )
-    Es = st.number_input(
-        "Elastic modulus Es (kPa)",
-        min_value=1.0, value=float(preset["Es"])
-    )
-
-with c2:
-    nu = st.number_input(
-        "Poisson's ratio ν",
-        min_value=0.0, max_value=0.49,
-        value=float(preset["nu"])
-    )
-    influence = st.number_input(
-        "Immediate settlement influence factor Is",
-        min_value=0.01, value=1.12
-    )
-
-with c3:
-    water_table = st.number_input(
-        "Water table depth below ground (m)",
-        min_value=0.0, value=3.0
-    )
-    water_unit_weight = st.number_input(
-        "Water unit weight (kN/m³)",
-        min_value=1.0, value=9.81
-    )
-
-st.header("3. Consolidation layer properties")
-
-st.write(
-    "Enter the properties of the compressible layer or layers. "
-    "Depth z is measured from the footing base to the centre "
-    "of each layer."
-)
-
-default_layers = pd.DataFrame([
-    {
-        "Layer": "Layer 1",
-        "Thickness H (m)": 2.0,
-        "Centre depth z (m)": 1.0,
-        "Initial effective stress (kPa)": 30.0,
-        "Preconsolidation stress (kPa)": preset["sigma_pc"],
-        "Cc": preset["Cc"],
-        "Cr": preset["Cr"],
-        "C_alpha": preset["C_alpha"],
-        "Initial void ratio e0": preset["e0"],
-        "End-primary void ratio ep": preset["ep"],
-        "Include primary": preset["Cc"] > 0,
-        "Include secondary": preset["C_alpha"] > 0,
-        "State": "Overconsolidated"
-    }
-])
-
-if soil_name == "Layered soil":
-    default_layers = pd.DataFrame([
-        {
-            "Layer": "Upper sand",
-            "Thickness H (m)": 0.5,
-            "Centre depth z (m)": 0.25,
-            "Initial effective stress (kPa)": 25.0,
-            "Preconsolidation stress (kPa)": 100.0,
-            "Cc": 0.0, "Cr": 0.0, "C_alpha": 0.0,
-            "Initial void ratio e0": 0.65,
-            "End-primary void ratio ep": 0.65,
-            "Include primary": False,
-            "Include secondary": False,
-            "State": "Normally consolidated"
-        },
-        {
-            "Layer": "Lower clay",
-            "Thickness H (m)": 3.0,
-            "Centre depth z (m)": 2.0,
-            "Initial effective stress (kPa)": 45.0,
-            "Preconsolidation stress (kPa)": 60.0,
-            "Cc": 0.35, "Cr": 0.07, "C_alpha": 0.025,
-            "Initial void ratio e0": 1.0,
-            "End-primary void ratio ep": 0.90,
-            "Include primary": True,
-            "Include secondary": True,
-            "State": "Overconsolidated"
-        }
-    ])
-
-edited_layers = st.data_editor(
-    default_layers,
-    num_rows="dynamic",
-    use_container_width=True,
-    key="layer_editor"
-)
-
-st.header("4. Consolidation time parameters")
-
-c1, c2 = st.columns(2)
-
-with c1:
-    t1 = st.number_input(
-        "Time at end of primary consolidation t1",
-        min_value=0.001, value=1.0
-    )
-
-with c2:
-    t2 = st.number_input(
-        "Final evaluation time t2",
-        min_value=0.001, value=10.0
-    )
-
-if t2 <= t1:
-    st.error("t2 must be greater than t1 for secondary settlement.")
-    st.stop()
-
-st.caption(
-    "Use the same time unit for t1 and t2, for example years."
-)
-
-st.header("5. Calculation options")
-
-include_immediate = st.checkbox(
-    "Include immediate settlement", value=True
-)
-
-include_primary = st.checkbox(
-    "Include primary consolidation settlement", value=True
-)
-
-include_secondary = st.checkbox(
-    "Include secondary settlement", value=True
-)
-
-# ---------------------------------------------------------
-# CALCULATION FUNCTIONS
-# ---------------------------------------------------------
-
-def immediate_settlement(q_net, B, Es, nu, Is):
-    """
-    Simplified elastic immediate settlement estimate.
-    Returns settlement in metres.
-    """
+def calculate_immediate(q_net, B, Es, nu, Is):
+    """Simplified elastic immediate settlement. Output in metres."""
     return q_net * B * (1 - nu**2) * Is / Es
 
 
-def stress_increase_2to1(q_net, B, L, z):
-    """
-    Simplified 2:1 stress distribution.
-    """
-    denominator = (B + z) * (L + z)
-    return q_net * B * L / denominator
+def calculate_stress_increase(q_net, B, L, z):
+    """Approximate 2:1 stress distribution. Output in kPa."""
+    return q_net * B * L / ((B + z) * (L + z))
 
 
-def primary_settlement(
-    H, sigma0, delta_sigma, sigma_pc,
-    Cc, Cr, e0
+def calculate_compression_index(e1, e2, sigma1, sigma2):
+    """
+    Calculate compression index from two e-log effective stress readings.
+    Returns None for invalid inputs.
+    """
+    if sigma1 <= 0 or sigma2 <= 0 or sigma2 <= sigma1:
+        return None
+
+    if e1 < 0 or e2 < 0 or e1 < e2:
+        return None
+
+    denominator = np.log10(sigma2 / sigma1)
+
+    if denominator <= 0:
+        return None
+
+    return (e1 - e2) / denominator
+
+
+def calculate_primary(
+    H, sigma0, delta_sigma, sigma_pc, Cc, Cr, e0
 ):
     """
-    One-dimensional e-log sigma' primary consolidation model.
+    One-dimensional e-log effective stress calculation.
 
-    NC: Cc throughout.
-    OC: Cr below preconsolidation stress and Cc above it.
+    NC: virgin compression index Cc.
+    OC: recompression index Cr below sigma_pc,
+        compression index Cc above sigma_pc.
+
+    Output in metres.
     """
+
     if H <= 0 or sigma0 <= 0 or e0 <= -1:
         return 0.0
 
@@ -1733,45 +1558,50 @@ def primary_settlement(
         return 0.0
 
     if sigma_pc <= sigma0:
-        # Soil is normally consolidated at the initial stress.
         settlement = (
             Cc * H / (1 + e0)
             * np.log10(final_stress / sigma0)
         )
 
     elif final_stress <= sigma_pc:
-        # Entire stress increment is recompression.
         settlement = (
             Cr * H / (1 + e0)
             * np.log10(final_stress / sigma0)
         )
 
     else:
-        # Recompression up to sigma_pc, then virgin compression.
-        recompression = (
+        S_recompression = (
             Cr * H / (1 + e0)
             * np.log10(sigma_pc / sigma0)
         )
 
-        # Approximate void ratio at preconsolidation stress.
-        e_pc = e0 - Cr * np.log10(sigma_pc / sigma0)
+        e_pc = (
+            e0 - Cr * np.log10(sigma_pc / sigma0)
+        )
 
-        virgin_compression = (
+        if e_pc <= -1:
+            raise ValueError(
+                "Calculated void ratio at preconsolidation "
+                "stress is invalid. Check input parameters."
+            )
+
+        S_virgin = (
             Cc * H / (1 + e_pc)
             * np.log10(final_stress / sigma_pc)
         )
 
-        settlement = recompression + virgin_compression
+        settlement = S_recompression + S_virgin
 
     return max(0.0, settlement)
 
 
-def secondary_settlement(H, C_alpha, ep, t1, t2):
-    """
-    Secondary compression settlement.
-    C_alpha is the secondary compression index in e-log(time).
-    """
+def calculate_secondary(H, C_alpha, ep, t1, t2):
+    """Secondary compression settlement. Output in metres."""
+
     if H <= 0 or C_alpha <= 0 or ep <= -1:
+        return 0.0
+
+    if t1 <= 0 or t2 <= t1:
         return 0.0
 
     return (
@@ -1780,106 +1610,17 @@ def secondary_settlement(H, C_alpha, ep, t1, t2):
     )
 
 
-# ---------------------------------------------------------
-# VALIDATION
-# ---------------------------------------------------------
+def calculate_layer_settlement(
+    layers, q_net, B, L, t1, t2,
+    use_primary=True, use_secondary=True
+):
+    """Sum primary and secondary settlement across layers."""
 
-if breadth_end < breadth_start:
-    st.error("Maximum breadth must be greater than minimum breadth.")
-    st.stop()
+    primary_total = 0.0
+    secondary_total = 0.0
+    layer_results = []
 
-if breadth_step <= 0:
-    st.error("Breadth increment must be positive.")
-    st.stop()
-
-if edited_layers.empty:
-    st.error("Enter at least one soil layer.")
-    st.stop()
-
-required_columns = [
-    "Thickness H (m)",
-    "Centre depth z (m)",
-    "Initial effective stress (kPa)",
-    "Preconsolidation stress (kPa)",
-    "Cc", "Cr", "C_alpha",
-    "Initial void ratio e0",
-    "End-primary void ratio ep",
-    "Include primary",
-    "Include secondary"
-]
-
-if not all(col in edited_layers.columns for col in required_columns):
-    st.error("The layer table is missing required columns.")
-    st.stop()
-
-numeric_columns = [
-    "Thickness H (m)",
-    "Centre depth z (m)",
-    "Initial effective stress (kPa)",
-    "Preconsolidation stress (kPa)",
-    "Cc", "Cr", "C_alpha",
-    "Initial void ratio e0",
-    "End-primary void ratio ep"
-]
-
-if edited_layers[numeric_columns].isnull().any().any():
-    st.error("Fill all numerical layer properties.")
-    st.stop()
-
-if (edited_layers["Thickness H (m)"] <= 0).any():
-    st.error("Layer thickness must be positive.")
-    st.stop()
-
-if (edited_layers["Initial effective stress (kPa)"] <= 0).any():
-    st.error("Initial effective stress must be positive.")
-    st.stop()
-
-if (edited_layers["Initial void ratio e0"] <= -1).any():
-    st.error("Initial void ratio must be greater than -1.")
-    st.stop()
-
-if (edited_layers["End-primary void ratio ep"] <= -1).any():
-    st.error("End-primary void ratio must be greater than -1.")
-    st.stop()
-
-# ---------------------------------------------------------
-# BREADTH TRIALS
-# ---------------------------------------------------------
-
-breadths = np.arange(
-    breadth_start,
-    breadth_end + breadth_step * 0.5,
-    breadth_step
-)
-
-results = []
-
-# Ground-level surcharge at footing base.
-q_surcharge = gamma * depth
-
-# This is a simplified gross-to-net pressure calculation.
-for B in breadths:
-
-    area = B * length
-    q_gross = load / area
-    q_net = q_gross - q_surcharge
-
-    if q_net < 0:
-        q_net = 0.0
-
-    # Immediate settlement
-    Si = 0.0
-
-    if include_immediate:
-        Si = immediate_settlement(
-            q_net, B, Es, nu, influence
-        )
-
-    # Primary and secondary settlement
-    Sc = 0.0
-    Ss = 0.0
-
-    for _, layer in edited_layers.iterrows():
+    for _, layer in layers.iterrows():
 
         H = float(layer["Thickness H (m)"])
         z = float(layer["Centre depth z (m)"])
@@ -1892,237 +1633,834 @@ for B in breadths:
             layer["Preconsolidation stress (kPa)"]
         )
 
-        delta_sigma = stress_increase_2to1(
-            q_net, B, length, z
+        Cc = float(layer["Cc"])
+        Cr = float(layer["Cr"])
+        C_alpha = float(layer["C_alpha"])
+        e0 = float(layer["Initial void ratio e0"])
+        ep = float(layer["End-primary void ratio ep"])
+
+        delta_sigma = calculate_stress_increase(
+            q_net, B, L, z
         )
 
-        if include_primary and bool(layer["Include primary"]):
+        Sc = 0.0
+        Ss = 0.0
 
-            Sc += primary_settlement(
-                H=H,
-                sigma0=sigma0,
-                delta_sigma=delta_sigma,
-                sigma_pc=sigma_pc,
-                Cc=float(layer["Cc"]),
-                Cr=float(layer["Cr"]),
-                e0=float(layer["Initial void ratio e0"])
+        if use_primary and bool(layer["Include primary"]):
+            Sc = calculate_primary(
+                H, sigma0, delta_sigma,
+                sigma_pc, Cc, Cr, e0
             )
 
-        if include_secondary and bool(layer["Include secondary"]):
-
-            Ss += secondary_settlement(
-                H=H,
-                C_alpha=float(layer["C_alpha"]),
-                ep=float(layer["End-primary void ratio ep"]),
-                t1=t1,
-                t2=t2
+        if use_secondary and bool(layer["Include secondary"]):
+            Ss = calculate_secondary(
+                H, C_alpha, ep, t1, t2
             )
 
-    Si_mm = Si * 1000
-    Sc_mm = Sc * 1000
-    Ss_mm = Ss * 1000
+        primary_total += Sc
+        secondary_total += Ss
 
-    total_mm = Si_mm + Sc_mm + Ss_mm
+        layer_results.append({
+            "Layer": layer["Layer"],
+            "Stress increase (kPa)": delta_sigma,
+            "Cc": Cc,
+            "Cr": Cr,
+            "Primary settlement (mm)": Sc * 1000,
+            "Secondary settlement (mm)": Ss * 1000
+        })
 
-    status = (
-        "PASS" if total_mm <= settlement_limit else "FAIL"
+    return primary_total, secondary_total, layer_results
+
+
+# =========================================================
+# 3. FOUNDATION INPUTS
+# =========================================================
+
+st.header("SECTION A - FOUNDATION DETAILS")
+
+c1, c2, c3 = st.columns(3)
+
+with c1:
+    P = st.number_input(
+        "Service vertical load P (kN)",
+        min_value=1.0,
+        value=900.0
     )
 
-    results.append({
-        "Breadth B (m)": B,
-        "Length L (m)": length,
-        "Area (m²)": area,
-        "Gross pressure (kPa)": q_gross,
-        "Net pressure (kPa)": q_net,
-        "Immediate (mm)": Si_mm,
-        "Primary (mm)": Sc_mm,
-        "Secondary (mm)": Ss_mm,
-        "Total settlement (mm)": total_mm,
-        "Allowable (mm)": settlement_limit,
-        "Status": status
-    })
+    Df = st.number_input(
+        "Foundation depth Df (m)",
+        min_value=0.0,
+        value=1.5
+    )
 
-df = pd.DataFrame(results)
+with c2:
+    L = st.number_input(
+        "Footing length L (m)",
+        min_value=0.1,
+        value=2.0
+    )
 
-# ---------------------------------------------------------
-# OUTPUTS
-# ---------------------------------------------------------
+    settlement_limit = st.number_input(
+        "Allowable total settlement (mm)",
+        min_value=0.1,
+        value=25.0
+    )
 
-st.header("6. Settlement results")
+with c3:
+    B_start = st.number_input(
+        "Minimum breadth (m)",
+        min_value=0.1,
+        value=1.5
+    )
+
+    B_end = st.number_input(
+        "Maximum breadth (m)",
+        min_value=0.2,
+        value=4.0
+    )
+
+    B_step = st.number_input(
+        "Breadth increment (m)",
+        min_value=0.05,
+        value=0.5
+    )
+
+
+# =========================================================
+# 4. SOIL INPUTS
+# =========================================================
+
+st.header("SECTION B - SOIL PARAMETERS")
+
+soil_name = st.selectbox(
+    "Select soil scenario",
+    list(SOILS.keys())
+)
+
+preset = SOILS[soil_name]
+
+c1, c2, c3 = st.columns(3)
+
+with c1:
+    gamma = st.number_input(
+        "Bulk unit weight γ (kN/m³)",
+        min_value=1.0,
+        value=float(preset["gamma"])
+    )
+
+    Es = st.number_input(
+        "Elastic modulus Es (kPa)",
+        min_value=1.0,
+        value=float(preset["Es"])
+    )
+
+with c2:
+    nu = st.number_input(
+        "Poisson's ratio ν",
+        min_value=0.0,
+        max_value=0.49,
+        value=float(preset["nu"])
+    )
+
+    Is = st.number_input(
+        "Immediate settlement influence factor Is",
+        min_value=0.01,
+        value=1.12
+    )
+
+with c3:
+    water_table = st.number_input(
+        "Water table depth below ground (m)",
+        min_value=0.0,
+        value=3.0
+    )
+
+    gamma_w = st.number_input(
+        "Water unit weight (kN/m³)",
+        min_value=1.0,
+        value=9.81
+    )
+
+st.caption(
+    "The water-table depth is recorded but does not automatically "
+    "calculate effective stresses. Enter groundwater-consistent "
+    "initial effective stresses for each consolidation layer."
+)
+
+
+# =========================================================
+# 5. SOIL LAYER INPUTS
+# =========================================================
+
+st.header("SECTION C - COMPRESSIBLE SOIL LAYERS")
+
+st.write(
+    "Depth to layer centre is measured below the footing base. "
+    "Enter each layer's properties separately."
+)
+
+if soil_name == "Layered soil":
+
+    default_layers = pd.DataFrame([
+        {
+            "Layer": "Upper loose sand",
+            "Thickness H (m)": 0.5,
+            "Centre depth z (m)": 0.25,
+            "Initial effective stress (kPa)": 25.0,
+            "Preconsolidation stress (kPa)": 100.0,
+            "C_alpha": 0.0,
+            "Initial void ratio e0": 0.65,
+            "End-primary void ratio ep": 0.65,
+            "Include primary": False,
+            "Include secondary": False
+        },
+        {
+            "Layer": "Lower soft clay",
+            "Thickness H (m)": 3.0,
+            "Centre depth z (m)": 2.0,
+            "Initial effective stress (kPa)": 45.0,
+            "Preconsolidation stress (kPa)": 60.0,
+            "C_alpha": 0.025,
+            "Initial void ratio e0": 1.0,
+            "End-primary void ratio ep": 0.90,
+            "Include primary": True,
+            "Include secondary": True
+        }
+    ])
+
+else:
+
+    default_layers = pd.DataFrame([
+        {
+            "Layer": "Layer 1",
+            "Thickness H (m)": 3.0,
+            "Centre depth z (m)": 1.5,
+            "Initial effective stress (kPa)": 50.0,
+            "Preconsolidation stress (kPa)": preset["sigma_pc"],
+            "C_alpha": preset["C_alpha"],
+            "Initial void ratio e0": preset["e0"],
+            "End-primary void ratio ep": preset["ep"],
+            "Include primary": preset["Cc"] > 0,
+            "Include secondary": preset["C_alpha"] > 0
+        }
+    ])
+
+edited_layers = st.data_editor(
+    default_layers,
+    num_rows="dynamic",
+    use_container_width=True,
+    key="layers_editor"
+)
+
+layers = edited_layers.copy()
+
+
+# =========================================================
+# 6. Cc AND Cr LABORATORY INPUTS
+# =========================================================
+
+st.subheader("Cc and Cr Calculation from Consolidation Test")
+
+
+def make_test_defaults(layer_df, soil_preset):
+    """Create illustrative editable test readings for each layer."""
+
+    rows = []
+
+    for _, layer in layer_df.iterrows():
+
+        e0 = float(layer["Initial void ratio e0"])
+        pc = float(layer["Preconsolidation stress (kPa)"])
+
+        name = str(layer["Layer"])
+
+        if "sand" in name.lower():
+            cc_default = 0.0
+            cr_default = 0.0
+        else:
+            cc_default = float(soil_preset["Cc"])
+            cr_default = float(soil_preset["Cr"])
+
+        # Virgin compression readings: both stresses above sigma_pc.
+        cc_s1 = pc * 1.2
+        cc_s2 = pc * 12.0
+
+        cc_e1 = e0
+        cc_e2 = e0 - cc_default * np.log10(cc_s2 / cc_s1)
+
+        # Recompression readings: both stresses below sigma_pc.
+        cr_s1 = pc * 0.1
+        cr_s2 = pc * 0.8
+
+        cr_e1 = e0
+        cr_e2 = e0 - cr_default * np.log10(cr_s2 / cr_s1)
+
+        rows.append({
+            "Layer": name,
+            "Cc e1": cc_e1,
+            "Cc e2": cc_e2,
+            "Cc σ1' (kPa)": cc_s1,
+            "Cc σ2' (kPa)": cc_s2,
+            "Cr e1": cr_e1,
+            "Cr e2": cr_e2,
+            "Cr σ1' (kPa)": cr_s1,
+            "Cr σ2' (kPa)": cr_s2
+        })
+
+    return pd.DataFrame(rows)
+
+
+test_defaults = make_test_defaults(layers, preset)
+
+test_inputs = st.data_editor(
+    test_defaults,
+    num_rows="fixed",
+    use_container_width=True,
+    key="consolidation_test_editor",
+    disabled=["Layer"]
+)
+
+# Calculate Cc and Cr for every layer.
+
+calculated_cc = []
+calculated_cr = []
+test_errors = []
+
+for index, row in test_inputs.iterrows():
+
+    layer_name = row["Layer"]
+
+    cc = calculate_compression_index(
+        float(row["Cc e1"]),
+        float(row["Cc e2"]),
+        float(row["Cc σ1' (kPa)"]),
+        float(row["Cc σ2' (kPa)"])
+    )
+
+    cr = calculate_compression_index(
+        float(row["Cr e1"]),
+        float(row["Cr e2"]),
+        float(row["Cr σ1' (kPa)"]),
+        float(row["Cr σ2' (kPa)"])
+    )
+
+    # Check whether the readings belong to the correct curve portions.
+    pc = float(
+        layers.iloc[index]["Preconsolidation stress (kPa)"]
+    )
+
+    cc_s1 = float(row["Cc σ1' (kPa)"])
+    cc_s2 = float(row["Cc σ2' (kPa)"])
+
+    cr_s1 = float(row["Cr σ1' (kPa)"])
+    cr_s2 = float(row["Cr σ2' (kPa)"])
+
+    if cc is None:
+        test_errors.append(
+            f"{layer_name}: Invalid Cc readings. Check e1, e2, "
+            "and ensure σ2' is greater than σ1'."
+        )
+
+    elif not (cc_s1 > pc and cc_s2 > pc):
+        test_errors.append(
+            f"{layer_name}: Cc stresses should both be above "
+            "preconsolidation stress."
+        )
+
+    if cr is None:
+        test_errors.append(
+            f"{layer_name}: Invalid Cr readings. Check e1, e2, "
+            "and ensure σ2' is greater than σ1'."
+        )
+
+    elif not (cr_s1 < pc and cr_s2 < pc):
+        test_errors.append(
+            f"{layer_name}: Cr stresses should both be below "
+            "preconsolidation stress."
+        )
+
+    calculated_cc.append(cc)
+    calculated_cr.append(cr)
+
+
+# Display calculated indices.
+
+st.subheader("Calculated Compression Indices")
+
+index_results = pd.DataFrame({
+    "Layer": test_inputs["Layer"],
+    "Calculated Cc": calculated_cc,
+    "Calculated Cr": calculated_cr
+})
 
 st.dataframe(
-    df.style.format({
-        "Breadth B (m)": "{:.2f}",
-        "Length L (m)": "{:.2f}",
-        "Area (m²)": "{:.2f}",
-        "Gross pressure (kPa)": "{:.2f}",
-        "Net pressure (kPa)": "{:.2f}",
-        "Immediate (mm)": "{:.2f}",
-        "Primary (mm)": "{:.2f}",
-        "Secondary (mm)": "{:.2f}",
-        "Total settlement (mm)": "{:.2f}",
-        "Allowable (mm)": "{:.2f}"
-    }),
+    index_results,
     use_container_width=True
 )
 
-passing = df[df["Status"] == "PASS"]
+if test_errors:
+    for error in test_errors:
+        st.error(error)
 
-if not passing.empty:
+# Add the calculated indices to the layer table.
+# These values are used directly in settlement calculations.
 
-    optimum = passing.iloc[0]
+layers["Cc"] = calculated_cc
+layers["Cr"] = calculated_cr
 
-    st.success(
-        f"Smallest passing trial breadth: "
-        f"{optimum['Breadth B (m)']:.2f} m"
+st.success(
+    "Cc and Cr are calculated from the entered laboratory readings "
+    "and are automatically linked to the primary consolidation calculation."
+)
+
+
+# =========================================================
+# 7. TIME INPUTS
+# =========================================================
+
+st.header("SECTION D - CONSOLIDATION TIME")
+
+c1, c2 = st.columns(2)
+
+with c1:
+    t1 = st.number_input(
+        "Time at end of primary consolidation t1",
+        min_value=0.001,
+        value=1.0
     )
 
-    c1, c2, c3 = st.columns(3)
-
-    c1.metric(
-        "Selected breadth",
-        f"{optimum['Breadth B (m)']:.2f} m"
+with c2:
+    t2 = st.number_input(
+        "Final evaluation time t2",
+        min_value=0.001,
+        value=10.0
     )
 
-    c2.metric(
-        "Total settlement",
-        f"{optimum['Total settlement (mm)']:.2f} mm"
-    )
+st.caption(
+    "Use the same time unit for both values, such as years."
+)
 
-    c3.metric(
-        "Footing area",
-        f"{optimum['Area (m²)']:.2f} m²"
-    )
+
+# =========================================================
+# 8. VALIDATION
+# =========================================================
+
+required_columns = [
+    "Layer",
+    "Thickness H (m)",
+    "Centre depth z (m)",
+    "Initial effective stress (kPa)",
+    "Preconsolidation stress (kPa)",
+    "Cc", "Cr", "C_alpha",
+    "Initial void ratio e0",
+    "End-primary void ratio ep",
+    "Include primary",
+    "Include secondary"
+]
+
+valid = True
+
+if not all(col in layers.columns for col in required_columns):
+    st.error("Layer table is missing required columns.")
+    valid = False
+
+elif layers.empty:
+    st.error("Enter at least one compressible layer.")
+    valid = False
 
 else:
-    st.error(
-        "No trial breadth satisfies the selected settlement limit. "
-        "Increase the trial range or review the design assumptions."
+
+    numeric_columns = [
+        "Thickness H (m)",
+        "Centre depth z (m)",
+        "Initial effective stress (kPa)",
+        "Preconsolidation stress (kPa)",
+        "Cc", "Cr", "C_alpha",
+        "Initial void ratio e0",
+        "End-primary void ratio ep"
+    ]
+
+    if layers[numeric_columns].isnull().any().any():
+        st.error("Fill all numerical layer properties.")
+        valid = False
+
+    elif (layers["Thickness H (m)"] <= 0).any():
+        st.error("Layer thickness must be positive.")
+        valid = False
+
+    elif (layers["Centre depth z (m)"] < 0).any():
+        st.error("Layer centre depth cannot be negative.")
+        valid = False
+
+    elif (layers["Initial effective stress (kPa)"] <= 0).any():
+        st.error("Initial effective stress must be positive.")
+        valid = False
+
+    elif (layers["Preconsolidation stress (kPa)"] <= 0).any():
+        st.error("Preconsolidation stress must be positive.")
+        valid = False
+
+    elif (layers[["Cc", "Cr", "C_alpha"]] < 0).any().any():
+        st.error("Compression indices cannot be negative.")
+        valid = False
+
+    elif (layers["Initial void ratio e0"] <= -1).any():
+        st.error("Initial void ratio must be greater than -1.")
+        valid = False
+
+    elif (layers["End-primary void ratio ep"] <= -1).any():
+        st.error("End-primary void ratio must be greater than -1.")
+        valid = False
+
+if test_errors:
+    valid = False
+
+if t2 <= t1:
+    st.error("Final time t2 must be greater than t1.")
+    valid = False
+
+if B_end < B_start:
+    st.error("Maximum breadth must exceed minimum breadth.")
+    valid = False
+
+if B_step <= 0:
+    st.error("Breadth increment must be positive.")
+    valid = False
+
+
+# =========================================================
+# 10. INDIVIDUAL CALCULATORS
+# =========================================================
+
+st.header("SECTION F - CALCULATE INDIVIDUAL SETTLEMENTS")
+
+calc_B = st.number_input(
+    "Breadth for individual calculations (m)",
+    min_value=0.1,
+    value=2.0,
+    key="individual_B"
+)
+
+if valid:
+
+    qgross_ind, qnet_ind = calculate_net_pressure(
+        P, calc_B, L, gamma, Df
     )
 
-# ---------------------------------------------------------
-# PLOT
-# ---------------------------------------------------------
+    st.write(
+        f"Gross pressure: **{qgross_ind:.2f} kPa**"
+    )
 
-st.header("7. Settlement versus footing breadth")
+    st.write(
+        f"Net pressure: **{qnet_ind:.2f} kPa**"
+    )
 
-fig, ax = plt.subplots(figsize=(10, 5))
+    with st.expander("Calculate Immediate Settlement", expanded=True):
 
-ax.plot(
-    df["Breadth B (m)"],
-    df["Immediate (mm)"],
-    marker="o",
-    label="Immediate"
+        if st.button(
+            "Calculate Immediate Settlement",
+            key="btn_immediate"
+        ):
+
+            Si = calculate_immediate(
+                qnet_ind, calc_B, Es, nu, Is
+            )
+
+            st.success(
+                f"Immediate settlement = {Si * 1000:.2f} mm"
+            )
+
+    with st.expander("Calculate Primary Consolidation", expanded=True):
+
+        if st.button(
+            "Calculate Primary Settlement",
+            key="btn_primary"
+        ):
+
+            Sc, _, layer_details = calculate_layer_settlement(
+                layers, qnet_ind, calc_B, L,
+                t1, t2,
+                use_primary=True,
+                use_secondary=False
+            )
+
+            st.success(
+                f"Primary consolidation settlement = {Sc * 1000:.2f} mm"
+            )
+
+            st.dataframe(
+                pd.DataFrame(layer_details),
+                use_container_width=True
+            )
+
+    with st.expander("Calculate Secondary Consolidation", expanded=True):
+
+        if st.button(
+            "Calculate Secondary Settlement",
+            key="btn_secondary"
+        ):
+
+            _, Ss, layer_details = calculate_layer_settlement(
+                layers, qnet_ind, calc_B, L,
+                t1, t2,
+                use_primary=False,
+                use_secondary=True
+            )
+
+            st.success(
+                f"Secondary settlement = {Ss * 1000:.2f} mm"
+            )
+
+            st.dataframe(
+                pd.DataFrame(layer_details),
+                use_container_width=True
+            )
+
+else:
+    st.warning(
+        "Correct the input errors before performing settlement calculations."
+    )
+
+
+# =========================================================
+# 11. BREADTH-WISE SETTLEMENT ANALYSIS
+# =========================================================
+
+st.header("SECTION G - SETTLEMENT FOR DIFFERENT FOOTING BREADTHS")
+
+st.write(
+    "This analysis calculates all settlement components for each "
+    "trial breadth using the same selected footing length."
 )
 
-ax.plot(
-    df["Breadth B (m)"],
-    df["Primary (mm)"],
-    marker="s",
-    label="Primary consolidation"
-)
+if st.button("Run Complete Breadth Analysis"):
 
-ax.plot(
-    df["Breadth B (m)"],
-    df["Secondary (mm)"],
-    marker="^",
-    label="Secondary"
-)
+    if not valid:
 
-ax.plot(
-    df["Breadth B (m)"],
-    df["Total settlement (mm)"],
-    marker="D",
-    linewidth=2,
-    label="Total settlement"
-)
+        st.error("Correct the input errors before running analysis.")
 
-ax.axhline(
-    settlement_limit,
-    linestyle="--",
-    label="Allowable settlement"
-)
+    else:
 
-ax.set_xlabel("Footing breadth B (m)")
-ax.set_ylabel("Settlement (mm)")
-ax.set_title("Settlement versus footing breadth")
-ax.grid(True)
-ax.legend()
+        breadths = np.arange(
+            B_start,
+            B_end + B_step * 0.5,
+            B_step
+        )
 
-st.pyplot(fig)
+        results = []
 
-# ---------------------------------------------------------
-# EXPORT
-# ---------------------------------------------------------
+        for B in breadths:
 
-st.header("8. Export")
+            qgross, qnet = calculate_net_pressure(
+                P, B, L, gamma, Df
+            )
 
-csv = df.to_csv(index=False).encode("utf-8")
+            Si = calculate_immediate(
+                qnet, B, Es, nu, Is
+            )
 
-st.download_button(
-    "Download settlement results (CSV)",
-    data=csv,
-    file_name="settlement_results.csv",
-    mime="text/csv"
-)
+            Sc, Ss, layer_details = calculate_layer_settlement(
+                layers, qnet, B, L,
+                t1, t2,
+                use_primary=True,
+                use_secondary=True
+            )
 
-# ---------------------------------------------------------
-# NOTES
-# ---------------------------------------------------------
+            Si_mm = Si * 1000
+            Sc_mm = Sc * 1000
+            Ss_mm = Ss * 1000
 
-with st.expander("Calculation assumptions and limitations"):
+            total = Si_mm + Sc_mm + Ss_mm
 
-    st.markdown("""
-    **Immediate settlement**
+            status = (
+                "PASS"
+                if total <= settlement_limit
+                else "FAIL"
+            )
 
-    The elastic equation used is:
+            results.append({
+                "Breadth (m)": B,
+                "Length (m)": L,
+                "Area (m²)": B * L,
+                "Gross pressure (kPa)": qgross,
+                "Net pressure (kPa)": qnet,
+                "Immediate (mm)": Si_mm,
+                "Primary (mm)": Sc_mm,
+                "Secondary (mm)": Ss_mm,
+                "Total settlement (mm)": total,
+                "Allowable (mm)": settlement_limit,
+                "Status": status
+            })
 
-    \[
-    S_i = \frac{q_n B(1-\\nu^2)I_s}{E_s}
-    \]
+        df = pd.DataFrame(results)
 
-    **Primary consolidation**
+        st.session_state["settlement_results"] = df
 
-    The calculation uses a simplified one-dimensional e-log effective
-    stress relationship. The recompression index Cr is used below
-    preconsolidation pressure and Cc above it.
 
-    **Stress distribution**
+# =========================================================
+# 12. DISPLAY RESULTS
+# =========================================================
 
-    Stress increase is estimated using the simplified 2:1 method:
+if "settlement_results" in st.session_state:
 
-    \[
-    \\Delta\\sigma_z =
-    \\frac{q_nBL}{(B+z)(L+z)}
-    \]
+    df = st.session_state["settlement_results"]
 
-    **Secondary settlement**
+    st.subheader("Breadth-wise Settlement Results")
 
-    \[
-    S_s =
-    \\frac{C_\\alpha H}{1+e_p}
-    \\log_{10}\\left(\\frac{t_2}{t_1}\\right)
-    \]
+    st.dataframe(
+        df.style.format({
+            "Breadth (m)": "{:.2f}",
+            "Length (m)": "{:.2f}",
+            "Area (m²)": "{:.2f}",
+            "Gross pressure (kPa)": "{:.2f}",
+            "Net pressure (kPa)": "{:.2f}",
+            "Immediate (mm)": "{:.2f}",
+            "Primary (mm)": "{:.2f}",
+            "Secondary (mm)": "{:.2f}",
+            "Total settlement (mm)": "{:.2f}",
+            "Allowable (mm)": "{:.2f}"
+        }),
+        use_container_width=True
+    )
 
-    C-alpha must be appropriate for the soil and time interval.
-    Secondary settlement is not automatically relevant to every soil.
+    passing = df[df["Status"] == "PASS"]
 
-    **Important limitations**
+    st.subheader("Preliminary Settlement-Based Breadth")
 
-    - Groundwater is displayed as an input but is not automatically
-      used to calculate each layer's initial effective stress.
-    - Enter initial effective stresses consistent with the groundwater
-      profile and soil layering.
-    - The 2:1 stress distribution is approximate.
-    - The immediate settlement equation is simplified and does not
-      replace a complete layered elastic analysis.
-    - This app does not calculate bearing capacity.
-    - It does not calculate time rate of consolidation or degree of
-      consolidation.
-    - The secondary calculation assumes the specified t1 represents
-      the end of primary consolidation.
-    - The first passing trial is only the smallest passing value in
-      the selected trial grid.
-    - A structural footing design and bearing-capacity check are still
-      required before selecting a foundation.
-    """)
+    if not passing.empty:
+
+        optimum = passing.iloc[0]
+
+        c1, c2, c3 = st.columns(3)
+
+        c1.metric(
+            "Smallest passing breadth",
+            f"{optimum['Breadth (m)']:.2f} m"
+        )
+
+        c2.metric(
+            "Total settlement",
+            f"{optimum['Total settlement (mm)']:.2f} mm"
+        )
+
+        c3.metric(
+            "Footing area",
+            f"{optimum['Area (m²)']:.2f} m²"
+        )
+
+        st.success(
+            "The selected breadth satisfies the specified "
+            "settlement limit within the trial range."
+        )
+
+    else:
+
+        st.error(
+            "No trial breadth satisfies the specified settlement limit."
+        )
+
+    # Settlement graph
+
+    st.subheader("Settlement versus Footing Breadth")
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+
+    ax.plot(
+        df["Breadth (m)"],
+        df["Immediate (mm)"],
+        marker="o",
+        label="Immediate settlement"
+    )
+
+    ax.plot(
+        df["Breadth (m)"],
+        df["Primary (mm)"],
+        marker="s",
+        label="Primary consolidation"
+    )
+
+    ax.plot(
+        df["Breadth (m)"],
+        df["Secondary (mm)"],
+        marker="^",
+        label="Secondary consolidation"
+    )
+
+    ax.plot(
+        df["Breadth (m)"],
+        df["Total settlement (mm)"],
+        marker="D",
+        linewidth=2,
+        label="Total settlement"
+    )
+
+    ax.axhline(
+        settlement_limit,
+        linestyle="--",
+        label="Allowable settlement"
+    )
+
+    ax.set_xlabel("Footing breadth (m)")
+    ax.set_ylabel("Settlement (mm)")
+    ax.set_title("Settlement versus Footing Breadth")
+    ax.grid(True)
+    ax.legend()
+
+    st.pyplot(fig)
+
+    # Component graph
+
+    st.subheader("Settlement Component Comparison")
+
+    fig2, ax2 = plt.subplots(figsize=(10, 5))
+
+    x = np.arange(len(df))
+    width = 0.25
+
+    ax2.bar(
+        x - width,
+        df["Immediate (mm)"],
+        width,
+        label="Immediate"
+    )
+
+    ax2.bar(
+        x,
+        df["Primary (mm)"],
+        width,
+        label="Primary"
+    )
+
+    ax2.bar(
+        x + width,
+        df["Secondary (mm)"],
+        width,
+        label="Secondary"
+    )
+
+    ax2.set_xticks(x)
+    ax2.set_xticklabels(
+        [f"{b:.2f}" for b in df["Breadth (m)"]]
+    )
+
+    ax2.set_xlabel("Footing breadth (m)")
+    ax2.set_ylabel("Settlement (mm)")
+    ax2.set_title("Individual Settlement Components")
+    ax2.grid(axis="y")
+    ax2.legend()
+
+    st.pyplot(fig2)
+
+    # CSV export
+
+    st.subheader("Download Results")
+
+    csv = df.to_csv(index=False).encode("utf-8")
+
+    st.download_button(
+        label="Download Settlement Results CSV",
+        data=csv,
+        file_name="settlement_results.csv",
+        mime="text/csv"
+    )
+
